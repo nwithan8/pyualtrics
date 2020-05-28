@@ -11,9 +11,14 @@ from datetime import datetime
 import pandas as pd
 import requests
 import time
-import timeit
+import logging
+
+logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
+
+
 
 header: str = ""
+verboseRequests: bool = False
 
 
 def _compare_timestamps(stamp1, stamp2, beforeAfter=None):
@@ -29,22 +34,26 @@ def _compare_timestamps(stamp1, stamp2, beforeAfter=None):
 
 
 def get_request(url, request_header=None, payload: dict = None, stream: bool = False):
-    print("GET {}".format(url))
+    if verboseRequests:
+        logging.info("GET {}".format(url))
     return requests.get(url, headers=(request_header if request_header else header), data=payload, stream=stream)
 
 
 def post_request(url, request_header=None, payload: dict = None):
-    print("POST {}".format(url))
+    if verboseRequests:
+        logging.info("POST {}".format(url))
     return requests.post(url, headers=(request_header if request_header else header), json=payload)
 
 
 def put_request(url, request_header=None, payload: dict = None):
-    print("PUT {}".format(url))
+    if verboseRequests:
+        logging.info("PUT {}".format(url))
     return requests.put(url, headers=(request_header if request_header else header), json=payload)
 
 
 def delete_request(url, request_header=None):
-    print("DELETE {}".format(url))
+    if verboseRequests:
+        logging.info("DELETE {}".format(url))
     return requests.delete(url, headers=(request_header if request_header else header))
 
 
@@ -61,30 +70,32 @@ class PermissionSet:
 
 class Qualtrics:
     def __init__(self, qualtricsUrl: str, qualtricsToken: str, surveyResponseFolder: str = None,
-                 skipAPICalls: bool = True):
+                 skipAPICalls: bool = True, verbose: bool = False):
         """
 
         :param qualtricsUrl: Your organizational base URL (likely https://yourorganization.qualtrics.com/API/v3)
         :param qualtricsToken: Your Qualtrics API key
         :param surveyResponseFolder: Where survey responses should be downloaded to
         :param skipAPICalls:
-        True: Make several Qualtrics API calls to create all object attributes.
+        False: Make several Qualtrics API calls to create all object attributes.
             Responses CSV files will be downloaded for every survey in your organization.
-        False: Certain attributes will have to be manually called from the API at a later time
+        True: Certain attributes will have to be manually called from the API at a later time
             (i.e. Qualtrics.get_surveys(), Qualtrics.get_users())
         """
-        global header
+        global header, verboseRequests
         self.baseUrl = qualtricsUrl
         self.token = qualtricsToken
         self.header = {'X-API-TOKEN': self.token}
         header = self.header
+        verboseRequests = verbose
+        self.skipAPICalls = skipAPICalls
         self.responseFolder = surveyResponseFolder
         self.surveys = []
         self.users = []
         self.mailing_lists = []
         self.libraries = []
         self.groups = []
-        if not skipAPICalls:  # will trigger a bunch of API calls, including downloading results files for every survey
+        if not self.skipAPICalls:  # will trigger a bunch of API calls, including downloading results files for every survey
             self.get_surveys()
             self.get_users()
             self.get_mailing_lists()
@@ -678,17 +689,22 @@ class User:
         self.data = data
         self.qualtrics = qualtrics
         self.id = data.get('id')
-        self.username = data.get('username')
+        if data.get('userId'):
+            self.id = data.get('userId')
+        self.username = data.get('userName')
         self.email = data.get('email')
         self.firstName = data.get('firstName')
         self.lastName = data.get('lastName')
         self.userType = data.get('userType')
+        self.brandId = data.get('brandId')
         self.organizationId = data.get('organizationId')
         self.divisionId = data.get('divisionId')
         self.language = data.get('language')
+        self.accountType = data.get('accountType')
         self.accountStatus = data.get('accountStatus')
         self.accountExpirationDate = data.get('accountExpirationDate')
-        self.permissions = PermissionSet(data.get('permissions'))
+        if not skipAPICalls:
+            self.permissions = PermissionSet(data.get('permissions'))
 
     def _construct_permissions_dict(self, permissionSet=None):
         if not permissionSet:
@@ -862,7 +878,6 @@ class Survey:
         if self.responsesFile and not skipAPICalls:
             self.get_responses()
         if not skipAPICalls:
-            print("Here")
             self.get_questions()
             self.get_quotas()
             self.get_flow()
@@ -923,8 +938,9 @@ class Survey:
         while downloadStatus not in ['complete', 'failed']:
             checkStatusUrl = downloadBaseUrl + progressId
             res = get_request(url=checkStatusUrl)
-            downloadProgress = res.json()['result']['percentComplete']
-            # print("Download is {0:.2f}% complete".format(downloadProgress))
+            if verboseRequests:
+                downloadProgress = res.json()['result']['percentComplete']
+                logging.info("Download is {0:.2f}% complete".format(downloadProgress))
             downloadStatus = res.json()['result']['status']
         if downloadStatus == 'failed':
             raise Exception('export failed')
@@ -936,7 +952,8 @@ class Survey:
 
         # unzip file
         zipfile.ZipFile(io.BytesIO(res.content)).extractall(self.responseFolder)
-        # print("File downloaded and extracted")
+        if verboseRequests:
+            logging.info("File downloaded and extracted")
         self.responsesFile = "{}/{}.{}".format(self.responseFolder, self.name, fileFormat)
         return self.responsesFile
 
@@ -992,7 +1009,7 @@ class Survey:
                 #    self._get_questions_for_response(response)
             return self.responses
         except Exception as e:
-            print(e)
+            logging.error(e)
             return None
 
     def get_response(self, response_id, re_download=False, skipAPICalls: bool = False):
@@ -1009,7 +1026,7 @@ class Survey:
                 self.responseDataframe = pd.read_csv(self.responsesFile, skiprows=[1, 2])
                 return self.responseDataframe
             except Exception as e:
-                print(e)
+                logging.error(e)
         return None
 
     def filter_responses_by_text(self, filters={}, existingFilter=None, saveFilter=False, folderName=None,
@@ -1176,13 +1193,12 @@ class Survey:
         # TODO: Determine how to match seemingly-unrelated response choice ID and question ID, to pass Question
         #  object to Response object
         for question_id, answer_id in response.answers.items():
-            print(question_id)
             for question in self.questions:
                 if question_id == question.id:
                     response.questions.append(question)
                     # print(question.data)
 
-    def copy(self, new_name: str = None, new_owner: User = None, new_owner_id: str = None, returnNewSurvey: bool = True,
+    def copy(self, new_name: str = None, new_owner: User = None, new_owner_id: str = None, activateNow: bool = True, returnNewSurvey: bool = True,
              skipAPICalls: bool = False):
         if new_owner:
             new_owner_id = new_owner.id
@@ -1215,6 +1231,8 @@ class Survey:
                 while retry_limit > 0:
                     new_survey = self.qualtrics.get_survey(survey_id=new_survey_id, forceUpdate=True, skipAPICalls=skipAPICalls)
                     if new_survey:
+                        if activateNow:
+                            new_survey = new_survey.update(isActive=True, skipAPICalls=skipAPICalls)
                         return new_survey
                     retry_limit -= 1
                 return new_survey
@@ -1270,7 +1288,7 @@ class Survey:
         if res:
             self.qualtrics.get_surveys(forceUpdate=True, skipAPICalls=skipAPICalls)
             if returnSharedUser:
-                print("Use the new User for future API calls on this survey")
+                logging.warning("Use the new User for future API calls on this survey")
                 return recipient
             return True
         if returnSharedUser:
