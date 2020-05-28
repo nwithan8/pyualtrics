@@ -6,6 +6,8 @@ setup(
     version='0.5',  # Start with a small number and increase it with every change you make
     license='GNU GPLv3',  # Chose a license from here: https://help.github.com/articles/licensing-a-repository
     description='Interact with Qualtrics API in Python',  # Give a short description about your library
+    long_description_content_type='text/markdown',
+    long_description='Full documentation available on GitHub at https://github.com/nwithan8/pyualtrics',
     author='Nate Harris',  # Type in your name
     author_email='n8gr8gbln@gmail.com',  # Type in your E-Mail
     url='https://github.com/nwithan8/pyualtrics',  # Provide either the link to your github or to your website
