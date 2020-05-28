@@ -1,8 +1,8 @@
 from distutils.core import setup
 
 setup(
-    name='Pyualtrics',  # How you named your package folder (MyLib)
-    packages=['Pyaultrics'],  # Chose the same as "name"
+    name='pyualtrics',  # How you named your package folder (MyLib)
+    packages=['pyaultrics'],  # Chose the same as "name"
     version='0.5',  # Start with a small number and increase it with every change you make
     license='GNU GPLv3',  # Chose a license from here: https://help.github.com/articles/licensing-a-repository
     description='Interact with Qualtrics API in Python',  # Give a short description about your library
