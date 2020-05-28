@@ -9,7 +9,7 @@ setup(
     author='Nate Harris',  # Type in your name
     author_email='n8gr8gbln@gmail.com',  # Type in your E-Mail
     url='https://github.com/nwithan8/pyualtrics',  # Provide either the link to your github or to your website
-    download_url='https://github.com/user/reponame/archive/v_01.tar.gz',  # I explain this later on
+    download_url='https://github.com/nwithan8/pyualtrics/archive/v0.5.tar.gz',  # I explain this later on
     keywords=['Qualtrics', 'surveys', 'survey', 'API', 'automation', 'scripting'],
     # Keywords that define your package best
     install_requires=[  # I get to this in a second
